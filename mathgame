@@ -1,0 +1,272 @@
+%%html
+<style>
+  .dice {
+    display: inline-block;
+    font-size: 40px; /* ←★大きくする */
+    transition: transform 0.5s;
+    margin: 0 10px;
+  }
+  .dice.spin {
+    transform: rotate(360deg);
+  }
+  .btn {
+    font-size: 20px;
+    padding: 10px 15px;
+    margin: 5px;
+    border: none;
+    border-radius: 6px;
+    background-color: #4CAF50;
+    color: white;
+    cursor: pointer;
+  }
+  .btn:disabled {
+    background-color: #aaa;
+    cursor: not-allowed;
+  }
+  #controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-top: 15px;
+    flex-wrap: wrap;
+  }
+  #operator {
+    font-size: 40px;
+    width: 60px;
+    height: 60px;
+    text-align: center;
+    line-height: 60px;
+    border: 2px solid #555;
+    border-radius: 8px;
+    background-color: #ddd;
+    color: black;
+    cursor: pointer;
+  }
+  #countdown {
+    font-size: 20px;
+    background: #007BFF;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 8px;
+    display: inline-block;
+    margin-top: 12px;
+  }
+  #result {
+    font-size: 28px;
+    color: green;
+    margin-top: 8px;
+  }
+  #message {
+    margin-top: 10px;
+    font-size: 20px;
+    font-weight: bold;
+    color: darkred;
+  }
+  #explain {
+    margin-top: 10px;
+    font-size: 16px;
+    color: #333;
+  }
+  #positionDisplay {
+    margin-top: 10px;
+    font-size: 18px;
+  }
+  #board {
+    display: flex;
+    flex-wrap: wrap;
+    width: 660px;
+    margin-top: 20px;
+  }
+  #board div {
+    width: 30px;
+    height: 30px;
+    margin: 2px;
+    border-radius: 4px;
+    line-height: 30px;
+    text-align: center;
+    font-weight: bold;
+    font-size: 14px;
+    color: black;   /* ←★黒字で見やすくする */
+    transition: background 0.3s;
+  }
+</style>
+
+<div id="controls">
+  <span id="dice1" class="dice">🎲</span>
+  <span id="operator" onclick="cycleOperator()">＋</span>
+  <span id="dice2" class="dice">🎲</span>
+  <button id="swapBtn" class="btn" onclick="swapDice()">🔁 入れ替え</button>
+  <button id="okBtn" class="btn" onclick="confirmOperation()" style="display:none;">OK</button>
+  <button id="rollBtn" class="btn" onclick="rollDice()">🎲 サイコロを振る</button>
+</div>
+
+<div id="explain">
+  <p>🔹 <strong>青マス</strong>：ゴール（50）<br>
+     🔹 <strong>ピンクマス（素数）</strong>：止まると<strong>スタートに戻る</strong><br>
+     🔹 サイコロの数字と四則演算を使って進もう！</p>
+</div>
+
+<div id="countdown"></div>
+<div id="result"></div>
+<div id="message"></div>
+<div id="positionDisplay"></div>
+<div id="board"></div>
+
+<script>
+let position = 0;
+const goal = 50;
+const max = 80;
+let diceValues = [1, 1];
+let operator = '+';
+let countdownInterval;
+let remainingTime = 20;
+
+const operatorList = ['+', '-', '×', '÷'];
+
+function isPrime(n) {
+  if (n < 2) return false;
+  for (let i = 2; i <= Math.sqrt(n); i++) if (n % i === 0) return false;
+  return true;
+}
+
+function updateBoard() {
+  const board = document.getElementById("board");
+  board.innerHTML = "";
+  for (let i = 0; i <= max; i++) {
+    const cell = document.createElement("div");
+    cell.textContent = i;
+    if (i === goal) {
+      cell.style.background = "lightblue";
+    } else if (i === position) {
+      cell.style.background = "yellow";
+    } else if (isPrime(i)) {
+      cell.style.background = "#f99"; /* ピンクマス（素数） */
+    } else {
+      cell.style.background = "#eee";
+    }
+    board.appendChild(cell);
+  }
+  document.getElementById("positionDisplay").innerHTML = `<strong>現在位置：</strong>${position}`;
+}
+
+function animateMove(newPos, callback) {
+  const step = newPos > position ? 1 : -1;
+  let temp = position;
+  const interval = setInterval(() => {
+    if (temp === newPos) {
+      clearInterval(interval);
+      callback();
+    } else {
+      temp += step;
+      position = temp;
+      updateBoard();
+    }
+  }, 150);
+}
+
+function rollDice() {
+  diceValues = [Math.ceil(Math.random() * 6), Math.ceil(Math.random() * 6)];
+  const diceElems = [document.getElementById("dice1"), document.getElementById("dice2")];
+  diceElems.forEach((d, i) => {
+    d.classList.add("spin");
+    setTimeout(() => {
+      d.textContent = diceEmoji(diceValues[i]);
+      d.classList.remove("spin");
+    }, 500);
+  });
+  document.getElementById("operator").textContent = operator;
+  document.getElementById("okBtn").style.display = "inline-block";
+  document.getElementById("rollBtn").disabled = true;
+  startCountdown();
+}
+
+function diceEmoji(num) {
+  return ['⚀','⚁','⚂','⚃','⚄','⚅'][num-1];
+}
+
+function cycleOperator() {
+  const idx = operatorList.indexOf(operator);
+  operator = operatorList[(idx + 1) % operatorList.length];
+  document.getElementById("operator").textContent = operator;
+}
+
+function swapDice() {
+  [diceValues[0], diceValues[1]] = [diceValues[1], diceValues[0]];
+  const d1 = document.getElementById("dice1");
+  const d2 = document.getElementById("dice2");
+  d1.style.transition = d2.style.transition = "transform 0.4s";
+  d1.style.transform = "translateX(40px)";
+  d2.style.transform = "translateX(-40px)";
+  setTimeout(() => {
+    d1.style.transform = d2.style.transform = "translateX(0)";
+    d1.textContent = diceEmoji(diceValues[0]);
+    d2.textContent = diceEmoji(diceValues[1]);
+  }, 400);
+}
+
+function startCountdown() {
+  remainingTime = 20;
+  document.getElementById("countdown").textContent = `残り時間：${remainingTime}秒`;
+  countdownInterval = setInterval(() => {
+    remainingTime--;
+    document.getElementById("countdown").textContent = `残り時間：${remainingTime}秒`;
+    if (remainingTime <= 0) {
+      clearInterval(countdownInterval);
+      confirmOperation();
+    }
+  }, 1000);
+}
+
+function confirmOperation() {
+  clearInterval(countdownInterval);
+  document.getElementById("okBtn").style.display = "none";
+  document.getElementById("rollBtn").disabled = false;
+  document.getElementById("countdown").textContent = "";
+
+  let result;
+  let msg = "";
+  switch (operator) {
+    case '+': result = diceValues[0] + diceValues[1]; break;
+    case '-': result = diceValues[0] - diceValues[1]; break;
+    case '×': result = diceValues[0] * diceValues[1]; break;
+    case '÷':
+      if (diceValues[1] !== 0 && diceValues[0] % diceValues[1] === 0) {
+        result = diceValues[0] / diceValues[1];
+      } else {
+        msg = "割り切れない！スタートに戻る";
+        animateMove(0, () => {
+          document.getElementById("message").textContent = msg;
+          document.getElementById("result").textContent = "";
+          updateBoard();
+        });
+        return;
+      }
+      break;
+  }
+
+  document.getElementById("result").textContent = `→ ${result} マス進む`;
+  const newPos = position + result;
+
+  animateMove(newPos, () => {
+    if (position === goal) {
+      msg = "ゴール！クリアおめでとう！";
+    } else if (position > max) {
+      msg = "80マスを超えた！ゲームオーバー！";
+      position = 0;
+    } else if (isPrime(position)) {
+      msg = "素数（ピンクマス）！スタートに戻る！";
+      animateMove(0, () => {
+        document.getElementById("message").textContent = msg;
+        updateBoard();
+      });
+      return;
+    } else if (position < 0) {
+      position = 0;
+    }
+    document.getElementById("message").textContent = msg;
+    updateBoard();
+  });
+}
+
+updateBoard();
+</script>
